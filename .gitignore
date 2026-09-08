@@ -1,0 +1,79 @@
+# ==============================================================================
+# mydeliverys_app — .gitignore
+# ==============================================================================
+
+# --- Python & FastAPI ---
+.venv/
+env/
+venv/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+.ruff_cache/
+.mypy_cache/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# --- Flutter & Dart ---
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+android/app/debug/
+android/app/profile/
+android/app/release/
+ios/Flutter/Generated.xcconfig
+ios/Flutter/app.framework
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Pods/
+ios/.symlinks/
+*.lockfile
+
+# --- Variables de Entorno y Secretos ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+service-account*.json
+google-services.json
+GoogleService-Info.plist
+
+# --- Base de Datos & Medios Locales ---
+*.sqlite3
+*.db
+uploads/
+media/
+storage/
+
+# --- IDEs y Editores ---
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# --- Sistema Operativo ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
