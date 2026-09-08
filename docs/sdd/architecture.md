@@ -197,3 +197,113 @@ stateDiagram-v2
 1.  **Protección de Cocina:** Ningún restaurante recibe notificación de orden antes del estado `PREPARING`.
 2.  **Protección de Entrega:** La aplicación del repartidor bloquea el botón "Completar Entrega" (`DELIVERED`) hasta que `payments` registre el segundo 50% en estado `VERIFIED`.
 3.  **Cancelación en Preparación o Camino:** Si ocurre una contingencia (ej. corte eléctrico en local o avería de moto), la orden pasa a `CANCELLED_WITH_REFUND`, notificando a `SUPER_ADMIN` con prioridad máxima para generar la transacción compensatoria del 50% verificado.
+
+---
+
+## 4. Arquitectura de Alta Concurrencia y Escalamiento (1.500 a 8.000 Usuarios)
+
+Para soportar picos de alta demanda en San Juan de los Morros (almuerzos de 12:00 a 14:00 y cenas de 19:00 a 21:30) con entre **1.500 usuarios concurrentes promedio y picos de hasta 8.000 usuarios activos simultáneos**, la arquitectura implementa controles estrictos de concurrencia y pooling.
+
+### 4.1. SLAs y Métricas de Rendimiento Bajo Carga
+*   **Latencia API REST:** Percentil 95 ($p_{95}$) $< 200\text{ ms}$ para endpoints de lectura y $< 300\text{ ms}$ para checkout.
+*   **Distribución WebSocket:** Latencia de entrega de coordenadas $< 50\text{ ms}$.
+*   **Tasa de Error:** $0.0\%$ de errores a 1.500 CCU (*Concurrent Connected Users*) y $< 0.1\%$ a 8.000 CCU.
+
+### 4.2. Topología de Conexiones: PgBouncer + Async Connection Pooling
+PostgreSQL maneja conexiones mediante procesos del sistema operativo (cada proceso reserva entre 5 y 10 MB de RAM). Abrir 8.000 conexiones directas provocaría una caída catastrófica del servidor por agotamiento de memoria.
+
+```mermaid
+graph LR
+    subgraph Clientes_Concurrentes [1.500 - 8.000 Apps Móviles]
+        C1[📱 Clientes]
+        C2[🛵 Drivers]
+        C3[🍳 Restaurantes]
+    end
+
+    subgraph App_Layer [FastAPI + Uvicorn uvloop]
+        W1[Worker 1]
+        W2[Worker 2]
+        W3[Worker N]
+    end
+
+    subgraph Pool_Layer [PgBouncer: Transaction Mode]
+        PB[🔄 PgBouncer Pooler]
+    end
+
+    subgraph DB_Layer [PostgreSQL + PostGIS]
+        DB[(🐘 80 - 120 Conexiones Físicas)]
+    end
+
+    Clientes_Concurrentes --> App_Layer
+    App_Layer -->|asyncpg pool: 20 por worker| PB
+    PB -->|Pool multiplexado| DB
+```
+
+*   **Configuración de PgBouncer:**
+    *   Modo de agrupación: `pool_mode = transaction`.
+    *   Conexiones de cliente aceptadas: `max_client_conn = 10000`.
+    *   Pool de conexiones reales a Postgres: `default_pool_size = 100`, `reserve_pool_size = 20`.
+*   **Configuración en FastAPI (`asyncpg`):**
+    *   `min_size = 10`, `max_size = 25` conexiones por worker Uvicorn.
+    *   Reutilización de conexiones sin handshake repetitivo.
+
+### 4.3. Capa de Caché Estratégica en Redis (Amortiguador de Lecturas)
+El 80% del tráfico en horas pico corresponde a exploración pasiva del menú y listado de restaurantes. Para proteger la base de datos:
+1.  **Caché de Restaurantes y Catálogos:**
+    *   Clave: `cache:restaurants:active` y `cache:menu:{restaurant_id}` (JSON serializado con compresión ligera).
+    *   TTL: 10 minutos con invalidación reactiva por eventos.
+    *   **Invalidación Inmediata:** Si un restaurante apaga un plato en su Kanban o cambia precios, FastAPI ejecuta `DEL cache:menu:{restaurant_id}` y publica el evento en Redis.
+2.  **Caché de Distancias Frecuentes:**
+    *   Cálculos espaciales de PostGIS para sectores comunes de San Juan de los Morros (ej. Casco Central hacia Los Rosales, La Morera, Rómulo Gallegos) cacheados con clave geo-hash para evitar re-ejecutar `ST_DistanceSphere` en cada navegación.
+
+### 4.4. Mitigación de Condiciones de Carrera (Race Conditions)
+
+#### 1. Doble Asignación de Repartidores (Concurrencia de Despacho)
+**Problema:** Al marcar una orden como `READY_FOR_PICKUP`, decenas de repartidores reciben la alerta en sus teléfonos. Si dos repartidores pulsan "Aceptar Pedido" simultáneamente, ambos podrían creerse asignados.
+**Solución Inquebrantable:** Actualización atómica con condición de guarda a nivel de fila SQL:
+```sql
+UPDATE orders
+SET driver_id = :driver_id,
+    status = 'ON_THE_WAY',
+    updated_at = NOW()
+WHERE id = :order_id
+  AND driver_id IS NULL
+  AND status = 'READY_FOR_PICKUP'
+RETURNING id;
+```
+*   Si la consulta retorna el `id`, la asignación fue exitosa y se notifica al repartidor.
+*   Si la consulta retorna 0 filas, el backend responde inmediatamente `HTTP 409 Conflict`:
+    ```json
+    {
+      "success": false,
+      "error_code": "ORDER_ALREADY_ASSIGNED",
+      "message": "Este pedido ya fue tomado por otro conductor.",
+      "data": null
+    }
+    ```
+
+#### 2. Idempotencia Financiera (Pagos Duplicados)
+**Problema:** Un cliente con señal inestable en San Juan de los Morros presiona varias veces "Enviar Pago" o la app reintenta la petición HTTP en segundo plano.
+**Solución:**
+*   Cabecera obligatoria: `X-Idempotency-Key` (UUIDv4 generado por la app cliente antes del envío).
+*   FastAPI ejecuta un `SET idempotency:{key} "PROCESSING" EX 120 NX` en Redis:
+    *   Si devuelve `False`, la petición ya está en curso o fue procesada; el backend devuelve la respuesta almacenada o un código `HTTP 429` / `409`.
+    *   Una vez verificado el reporte, se guarda el resultado del pago en la clave de idempotencia con TTL de 24 horas.
+
+#### 3. Control de Sobreventa de Stock
+Para productos con stock limitado:
+```sql
+UPDATE products
+SET stock = stock - :quantity,
+    updated_at = NOW()
+WHERE id = :product_id
+  AND is_available = true
+  AND stock >= :quantity
+RETURNING stock;
+```
+Si el stock resultante es 0, un disparador o evento en la API actualiza `is_available = false` e invalida la caché del menú.
+
+### 4.5. Escalado Horizontal de WebSockets (Tracking en Vivo)
+*   Las instancias de FastAPI no mantienen estado local de WebSockets en memoria ram de la máquina.
+*   Toda publicación de coordenadas (`WS /ws/driver/track`) se emite al bus de **Redis Pub/Sub** (`order:{id}:location`).
+*   Cualquier worker de FastAPI suscrito al canal reenvía el paquete WebSocket a la app cliente conectada, permitiendo balancear la carga entre múltiples contenedores detrás de Nginx / Traefik sin problemas de afinidad de sesiones.

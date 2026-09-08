@@ -43,7 +43,8 @@ mydeliverys_app/
 │   └── sdd/                     # Documentación oficial y viva (SDD)
 │       ├── constitution.md      # Principios inquebrantables del proyecto
 │       ├── stack.md             # Stack tecnológico aprobado
-│       ├── architecture.md      # Topología, modelo relacional y máquina de estados
+│       ├── architecture.md      # Topología, modelo relacional, máquina de estados y concurrencia
+│       ├── testing_strategy.md  # Pirámide de pruebas, concurrencia y pruebas de carga (1.500 - 8.000 CCU)
 │       └── features/            # Especificaciones funcionales detalladas
 │           ├── admin_dashboards.md
 │           ├── auth_and_roles.md
@@ -62,14 +63,15 @@ mydeliverys_app/
 
 Toda decisión técnica y funcional está documentada en la carpeta [`docs/sdd/`](./docs/sdd):
 
-1. [📜 Constitución del Proyecto](./docs/sdd/constitution.md): Principios innegociables, manejo monetario con `Decimal`/`Numeric`, convenciones de idioma (código en inglés, UI en español) y formato estándar de respuestas de API.
-2. [🛠️ Stack Tecnológico](./docs/sdd/stack.md): Justificación y catálogo de librerías aprobadas.
-3. [🏗️ Arquitectura y Modelo de Datos](./docs/sdd/architecture.md): Topología de micro-componentes, esquemas de tablas con PostGIS y máquina de estados del pedido.
-4. [🔐 Autenticación y Roles](./docs/sdd/features/auth_and_roles.md): Ciclo de vida de tokens, roles y flujo OTP por WhatsApp.
-5. [🍔 Catálogo y Carrito](./docs/sdd/features/catalog_and_cart.md): Jerarquía de productos, modificadores y persistencia offline.
-6. [🛒 Checkout y Regla 50/50](./docs/sdd/features/checkout_and_5050.md): Motor financiero del ledger, cálculo de envío por distancia y conciliación.
-7. [🛵 Seguimiento en Vivo](./docs/sdd/features/live_tracking.md): WebSockets, Redis Pub/Sub y geocercas.
-8. [💻 Paneles de Control](./docs/sdd/features/admin_dashboards.md): Kanban de cocina y consola Super Admin.
+1. [📜 Constitución del Proyecto](./docs/sdd/constitution.md): Principios innegociables, manejo monetario con `Decimal`/`Numeric`, seguridad en concurrencia y formato estándar de respuestas de API.
+2. [🛠️ Stack Tecnológico](./docs/sdd/stack.md): Justificación y catálogo de librerías aprobadas (incluyendo PgBouncer y herramientas de testing).
+3. [🏗️ Arquitectura y Alta Concurrencia](./docs/sdd/architecture.md): Topología de micro-componentes, esquemas PostGIS, máquina de estados y soporte para 1.500 - 8.000 usuarios concurrentes.
+4. [🧪 Estrategia de Pruebas y Carga](./docs/sdd/testing_strategy.md): Pirámide de pruebas (Unitarias, Integración, Concurrencia/Race Conditions y Estrés con Locust).
+5. [🔐 Autenticación y Roles](./docs/sdd/features/auth_and_roles.md): Ciclo de vida de tokens, roles y flujo OTP por WhatsApp.
+6. [🍔 Catálogo y Carrito](./docs/sdd/features/catalog_and_cart.md): Jerarquía de productos, modificadores y persistencia offline.
+7. [🛒 Checkout y Regla 50/50](./docs/sdd/features/checkout_and_5050.md): Motor financiero del ledger, cálculo de envío por distancia y conciliación.
+8. [🛵 Seguimiento en Vivo](./docs/sdd/features/live_tracking.md): WebSockets, Redis Pub/Sub y geocercas.
+9. [💻 Paneles de Control](./docs/sdd/features/admin_dashboards.md): Kanban de cocina y consola Super Admin.
 
 ---
 

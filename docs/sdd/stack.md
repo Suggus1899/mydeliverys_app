@@ -23,14 +23,29 @@ Este documento define la infraestructura tecnológica aprobada. **Bajo ninguna c
 *   **Tareas en Segundo Plano:** `Celery` + `Redis` (o `BackgroundTasks` de FastAPI si la escala inicial es pequeña).
     *   *Uso:* Enviar correos/SMS de confirmación o notificar a los restaurantes sin bloquear la respuesta al usuario.
 
-## 3. Base de Datos (Persistencia)
-*   **Motor Principal:** **PostgreSQL**.
+## 3. Base de Datos (Persistencia e Infraestructura de Conexión)
+*   **Motor Principal:** **PostgreSQL** con extensión espacial **PostGIS** (cálculo de distancias y costos de envío).
+*   **Gestor de Pool de Conexiones:** **PgBouncer** (Modo Transaction Pooling) para sostener picos de hasta 8.000 clientes concurrentes sin agotar la memoria de PostgreSQL.
+*   **Driver Asíncrono:** `asyncpg`.
 *   **ORM (Mapeo Objeto-Relacional):** **SQLAlchemy** (v2.0+) o **SQLModel**.
     *   *Regla:* Prohibido escribir queries SQL en crudo (raw SQL) para operaciones CRUD estándar. Se debe usar la API del ORM para evitar inyección SQL.
 *   **Migraciones:** **Alembic**.
     *   *Regla:* Cualquier cambio en la estructura de la base de datos (nuevas tablas, columnas) DEBE generarse a través de un script de Alembic. No se permite modificar tablas directamente en la BD de producción.
 
 ## 4. Integraciones de Terceros (APIs)
-*   **Pasarela de Pagos:** [Definir proveedor local - ej. Pago Móvil a través de un agregador, o Binance Pay].
+*   **Pasarela de Pagos:** Pago Móvil (bancos locales venezolanos) y Binance Pay.
     *   *Regla de Seguridad:* El backend NUNCA debe almacenar números de tarjeta de crédito (PCI DSS).
 *   **Notificaciones Push:** Firebase Cloud Messaging (FCM).
+*   **Mensajería y OTP:** WhatsApp Business API (Meta Cloud API o Twilio) para verificación de clientes.
+
+## 5. Herramientas de Pruebas y Aseguramiento de Calidad (Testing & QA)
+*   **Backend (Python):**
+    *   **Framework Principal de Pruebas:** `pytest` con `pytest-asyncio` para pruebas asíncronas de FastAPI.
+    *   **Cliente de Pruebas HTTP:** `httpx.AsyncClient`.
+    *   **Servicios Reales en Contenedores:** `testcontainers-python` para instanciar PostgreSQL + PostGIS y Redis durante pruebas de integración.
+    *   **Generador de Datos:** `factory-boy` o `faker`.
+    *   **Pruebas de Carga y Estrés:** **Locust** (simulación de 1.500 a 8.000 usuarios concurrentes).
+*   **Frontend (Flutter/Dart):**
+    *   **Pruebas Unitarias y de Widgets:** `flutter_test`.
+    *   **Mocking:** `mocktail` para aislar proveedores de Riverpod y servicios de red.
+    *   **Pruebas de Integración E2E:** `integration_test` para validar flujos completos de usuario en dispositivos reales o emuladores.

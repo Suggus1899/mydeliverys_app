@@ -6,6 +6,8 @@ Este documento define las reglas inquebrantables, principios de ingeniería y co
 *   **Fuente de la Verdad:** La documentación SDD (Spec-Driven Development) es la única fuente de la verdad. Si el código diverge de la especificación, el código es incorrecto.
 *   **Resiliencia de Red (Contexto Local):** La conexión en San Juan de los Morros puede fluctuar. La aplicación Flutter debe manejar transiciones offline/online con gracia (ej. guardar el carrito en caché local y reintentar peticiones fallidas).
 *   **Integridad Financiera (Regla 50/50):** Ningún pedido puede pasar al estado "En Preparación" sin que el backend (Python) valide el pago del primer 50%. El estado del pago final (el otro 50%) debe bloquear el cierre del ciclo del pedido hasta ser confirmado. NUNCA se debe confiar en el cálculo de precios proveniente del frontend.
+*   **Seguridad en Concurrencia y Cero Doble Asignación:** Todo endpoint transaccional o de despacho (asignación de pedidos, reportes de pagos, control de stock) debe ser atómico y seguro contra condiciones de carrera (*race conditions*). Queda estrictamente prohibido permitir que dos repartidores tomen el mismo pedido o que un reporte de pago se duplique.
+*   **Aseguramiento de Calidad y Cobertura Financiera 100%:** La lógica financiera del ledger 50/50 y las transiciones de la máquina de estados deben tener **cobertura del 100%** en pruebas unitarias automatizadas. Todo endpoint crítico debe superar pruebas de concurrencia y validar los SLAs de carga (1.500 a 8.000 usuarios concurrentes).
 
 ## 2. Convenciones de Código
 *   **Idioma:** 

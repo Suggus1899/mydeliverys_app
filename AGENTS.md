@@ -16,7 +16,9 @@ Plataforma integral de delivery adaptada a las condiciones locales de San Juan d
 - Migraciones de Base de Datos:
   - Generar revisión: `alembic revision --autogenerate -m "descripcion"`
   - Aplicar migraciones: `alembic upgrade head`
-- Pruebas automatizadas: `pytest -v`
+- Pruebas automatizadas (Unitarias e Integración): `pytest -v`
+- Pruebas de concurrencia y condiciones de carrera: `pytest -v tests/concurrency/`
+- Pruebas de carga y estrés (Locust): `locust -f tests/load/locustfile.py --headless -u 1500 -r 50 --run-time 5m`
 - Formateo y Linter: `ruff check .` / `ruff format .` o `black .`
 
 ### Frontend / Mobile (`mobile/` o apps cliente)
@@ -63,13 +65,16 @@ Plataforma integral de delivery adaptada a las condiciones locales de San Juan d
    }
    ```
 5. **No fallar en silencio:** Prohibido el uso de `try/except: pass` en Python o capturas de excepciones vacías en Dart.
+6. **Seguridad en Concurrencia (Cero Doble Asignación):** Todo endpoint transaccional (despacho de pedidos, deducción de stock y pagos) debe ser atómico y mitigar *race conditions* (`UPDATE ... WHERE driver_id IS NULL`, `X-Idempotency-Key` en Redis).
+7. **Cobertura de Pruebas 100% en Ledger:** La lógica matemática del cálculo 50/50 y las transiciones de la máquina de estados deben contar con un 100% de cobertura en pruebas unitarias antes de fusionar código.
 
 ---
 
 ## ✅ Al Terminar Cualquier Tarea
 1. Verificar que el código pasa el linter y type checking (`ruff check .`, `flutter analyze`).
-2. Comprobar que las pruebas automatizadas pasan limpiamente.
-3. Crear commits siguiendo la convención **Conventional Commits**:
+2. Comprobar que las pruebas automatizadas pasan limpiamente (`pytest -v`, `flutter test`).
+3. Comprobar que las pruebas de concurrencia pasan si se modificaron módulos transaccionales.
+4. Crear commits siguiendo la convención **Conventional Commits**:
    - `feat: <nueva característica>`
    - `fix: <corrección de error>`
    - `refactor: <refactorización>`
