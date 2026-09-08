@@ -307,3 +307,57 @@ Si el stock resultante es 0, un disparador o evento en la API actualiza `is_avai
 *   Las instancias de FastAPI no mantienen estado local de WebSockets en memoria ram de la máquina.
 *   Toda publicación de coordenadas (`WS /ws/driver/track`) se emite al bus de **Redis Pub/Sub** (`order:{id}:location`).
 *   Cualquier worker de FastAPI suscrito al canal reenvía el paquete WebSocket a la app cliente conectada, permitiendo balancear la carga entre múltiples contenedores detrás de Nginx / Traefik sin problemas de afinidad de sesiones.
+
+---
+
+## 5. Rate Limiting y Protección de Recursos (Base de Datos y APIs)
+
+Para blindar la base de datos PostgreSQL de consultas redundantes y mitigar ataques de denegación de servicio (DoS) o sobrecostos en APIs de terceros (WhatsApp OTP y Firebase Cloud Messaging), la API Gateway implementa un middleware de **Rate Limiting** respaldado en Redis.
+
+### 5.1. Algoritmo de Ventana Deslizante (Sliding Window en Redis)
+En lugar de una ventana fija (que permite ráfagas dobles en el borde del minuto), se utiliza una estructura de **Sorted Sets (`ZSET`)** en Redis:
+1.  **Clave:** `ratelimit:{identifier}:{endpoint_group}` (donde `identifier` es el `user_id` autenticado o la `IP` para rutas públicas).
+2.  **Registro:** Se añade la marca de tiempo actual ($T_{now}$) con `ZADD`.
+3.  **Purga:** Se eliminan marcas anteriores a $T_{now} - \text{ventana}$ con `ZREMRANGEBYSCORE`.
+4.  **Conteo:** Se cuenta el número de elementos restantes con `ZCARD`. Si $\text{conteo} > \text{límite}$, se rechaza la solicitud de inmediato antes de tocar la base de datos.
+5.  **Expiración:** `EXPIRE` ajustado a la ventana para liberar memoria automáticamente.
+
+### 5.2. Tabla de Cuotas por Endpoint y Rol
+
+| Grupo de Endpoints | Límite por Usuario / IP | Ventana | Acción al Exceder | Objetivo de Protección |
+| :--- | :--- | :--- | :--- | :--- |
+| **`POST /auth/request-otp`** | **3 peticiones** | 10 minutos | Bloqueo temporal 10 min | Evita costos de WhatsApp API y spam SMS |
+| **`POST /auth/verify-otp`** | **5 intentos** | 3 minutos | Invalidación del OTP | Mitiga ataques de fuerza bruta al código de 6 dígitos |
+| **`POST /orders/draft`** | **10 peticiones** | 1 minuto | `429 Too Many Requests` | Evita saturación del cálculo geoespacial en PostGIS |
+| **`POST /payments/{id}/report`** | **5 peticiones** | 1 minuto | `429 Too Many Requests` | Protege el ledger financiero de spam o toques repetidos |
+| **`GET /restaurants`, `/menu`** | **60 peticiones** | 1 minuto | `429 Too Many Requests` | Protege la capa de caché y la base de datos relacional |
+| **`WS /ws/driver/track`** | **1 ping cada 3 s** | En tiempo real | Descarte silencioso de ráfaga | Protege el bus Redis Pub/Sub de spam GPS del teléfono |
+| **Endpoints Generales API** | **120 peticiones** | 1 minuto | `429 Too Many Requests` | Carga nominal para usuarios autenticados |
+
+### 5.3. Formato Estándar de Respuesta `HTTP 429` y Cabeceras
+Toda respuesta limitada por cuota incluye las cabeceras HTTP estándar de la industria y la estructura JSON inmutable del proyecto:
+
+```http
+HTTP/1.1 429 Too Many Requests
+Retry-After: 42
+X-RateLimit-Limit: 10
+X-RateLimit-Remaining: 0
+X-RateLimit-Reset: 1725754800
+Content-Type: application/json
+```
+
+```json
+{
+  "success": false,
+  "error_code": "RATE_LIMIT_EXCEEDED",
+  "message": "Has excedido el límite de solicitudes permitidas. Por favor espera antes de intentar nuevamente.",
+  "data": {
+    "retry_after_seconds": 42,
+    "limit": 10,
+    "window": "1m"
+  }
+}
+```
+
+### 5.4. Aislamiento y Cortafuegos de PostgreSQL
+El middleware de FastAPI intercepta las solicitudes entrantes **antes de que cualquier conexión del pool de `asyncpg` sea reservada**. Si una petición excede la cuota de rate limiting o puede ser resuelta desde la caché en Redis, la base de datos PostgreSQL ni siquiera registra actividad de red, garantizando que el motor relacional conserve el 100% de sus recursos para transacciones de compras y entregas en curso.
