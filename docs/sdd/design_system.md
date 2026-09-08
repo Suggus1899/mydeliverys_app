@@ -6,53 +6,60 @@ Este documento define la identidad visual, tokens de diseño, tipografía, compo
 
 ## 1. Filosofía y Principios de Diseño
 
-1.  **Calidez Llanera y Modernidad:** Estética contemporánea inspirada en los tonos cálidos del atardecer llanero y la vitalidad de San Juan de los Morros, alejándose de interfaces genéricas o frías.
-2.  **Transparencia Financiera Inmediata:** La división del pago 50/50 debe ser visualmente intuitiva. El usuario siempre debe saber qué paga ahora y qué pagará al repartidor al recibir.
-3.  **Resiliencia Sensorial en Entornos Reales:**
-    *   *Repartidores en Moto:* Interfaz de alto contraste legible bajo la intensa luz solar del mediodía y operable con guantes mediante gestos deslizantes (*Swipe-to-Action*).
-    *   *Cocinas en Hora Pico:* Interfaz táctil de gran formato para tablets con alertas acústicas y códigos de color de alta visibilidad.
+1.  **Concepto de Marca: "Apetito Cálido y Confiable":**
+    *   **Psicología del Color y Apetito:** Los tonos cálidos (naranja coral y bermellón) estimulan fisiológicamente el apetito y transmiten agilidad y cercanía sin resultar agresivos.
+    *   **Regla de Moderación del Primario (Acción Principal Única):** Si todo es naranja, nada destaca. El color primario se reserva estrictamente para la acción principal de cada pantalla (ej. botones "Pedir Ahora", "Confirmar Pago", precio final y badge del estado activo).
+2.  **Enfoque de Implementación: Light Theme First (V1):**
+    *   La versión 1 prioriza un **Tema Claro pulcro y luminoso**. El fondo actúa como un lienzo blanco/gris claro donde las fotografías de hamburguesas, empanadas, pizzas y comida local son las verdaderas protagonistas.
+    *   El modo oscuro queda planificado para fases posteriores (ej. optimización de batería nocturna para repartidores).
+3.  **Tipografía Amigable y Precisión Financiera:**
+    *   Titulares en `Outfit` para cercanía y modernidad.
+    *   Textos y montos en `Inter` con cifras tabulares fijas para que la división 50/50 (`$7.51` y `$7.50`) nunca oscile visualmente.
 
 ---
 
-## 2. Tokens de Color (Color Palette)
+## 2. Paleta Oficial: "Apetito Cálido y Confiable"
 
-### 2.1. Colores de Marca y Acento
-| Token | Código HEX | Rol Semántico |
-| :--- | :--- | :--- |
-| `primary-500` | `#FF5722` | **Naranja San Juan:** Color primario, llamadas a la acción principales, marca. |
-| `primary-600` | `#E64A19` | Estado presionado / hover del primario. |
-| `primary-100` | `#FFCCBC` | Fondos de alertas primarias y chips seleccionados. |
-| `secondary-500`| `#10B981` | **Verde Esmeralda:** Éxito, pagos verificados, entregas completadas y frescura. |
-| `secondary-600`| `#059669` | Estado presionado del secundario. |
-| `secondary-100`| `#D1FAE5` | Fondos de badges de éxito. |
+### 2.1. Color Primario (El Sello de la Marca)
+*   **Tono:** **Naranja Coral / Rojo Bermellón Suave** (`#FF5A36`).
+*   **Sensación:** Energía, rapidez, hambre, cercanía y calidez.
+*   **Tokens:**
+    *   `primary-500` (`#FF5A36`): Color principal para botones primarios ("Pedir Ahora", "Confirmar Pago"), logos y acentos destacados.
+    *   `primary-600` (`#E04422`): Estado presionado / active.
+    *   `primary-100` (`#FFEBE6`): Fondos sutiles para chips seleccionados y avisos primarios.
 
-### 2.2. Superficies y Neutros (Modo Claro vs Modo Oscuro)
+### 2.2. Color Secundario y Textos (Gris Carbón Profundo)
+*   **Tono:** **Gris Carbón Profundo** (`#1E2229` y `#2A2F3A`).
+*   **Justificación Ergonómica:** El negro puro (`#000000`) genera fatiga visual en pantallas OLED/LCD móviles. Un gris carbón muy oscuro proporciona máxima nitidez tipográfica, excelente contraste (cumpliendo WCAG 2.1 AAA) y elegancia moderna.
+*   **Tokens:**
+    *   `text-primary` (`#1E2229`): Títulos principales, nombres de restaurantes, precios.
+    *   `text-secondary` (`#5A6270`): Descripciones de platos, dirección, metadatos secundarios.
+    *   `text-tertiary` (`#8C95A6`): Placeholders, subtítulos menores y separadores.
 
-```text
-Modo Claro (Light Theme)               Modo Oscuro (Dark Theme)
-┌──────────────────────────────┐       ┌──────────────────────────────┐
-│ Background: #F8F9FA          │       │ Background: #121214          │
-│ Surface (Cards): #FFFFFF     │       │ Surface (Cards): #1E1E24     │
-│ Border / Divider: #E5E7EB    │       │ Border / Divider: #2C2C34    │
-│ Text Primary: #1F2937        │       │ Text Primary: #F9FAFB        │
-│ Text Secondary: #6B7280      │       │ Text Secondary: #9CA3AF      │
-└──────────────────────────────┘       └──────────────────────────────┘
-```
+### 2.3. Fondo de Pantalla y Superficies (El Lienzo Claro)
+*   **Tono:** **Blanco Marfil / Gris Muy Claro** (`#F8F9FA` y `#FFFFFF`).
+*   **Justificación:** Las fotografías de comida necesitan respirar. Un fondo claro y luminoso hace que los colores de los ingredientes resalten de forma llamativa.
+*   **Tokens:**
+    *   `background-canvas` (`#F8F9FA`): Fondo general de la aplicación.
+    *   `surface-card` (`#FFFFFF`): Superficie de tarjetas de restaurantes, productos y bottom sheets.
+    *   `border-subtle` (`#E9ECEF`): Divisores y bordes sutiles entre secciones.
 
-### 2.3. Semáforo Funcional de Estados del Pedido (`OrderStatus`)
-Cada estado de la orden tiene asignado un color inmutable en badges y barras de progreso:
-
-| Estado | Color HEX | Significado Visual |
-| :--- | :--- | :--- |
-| `DRAFT` | `#6B7280` | Gris Neutro: Cotización en proceso |
-| `PAYMENT_1_PENDING` | `#F59E0B` | Ámbar Dorado: Esperando pago del 50% |
-| `PAYMENT_1_VERIFYING`| `#8B5CF6` | Violeta Eléctrico: Verificando referencia bancaria |
-| `PREPARING` | `#3B82F6` | Azul Cobalto: Cocina preparando alimentos |
-| `READY_FOR_PICKUP` | `#06B6D4` | Cian: Esperando recolección del repartidor |
-| `ON_THE_WAY` | `#F97316` | Naranja Dinámico: Pedido en tránsito GPS en vivo |
-| `ARRIVED_AT_CUSTOMER`| `#EC4899`| Rosa / Magenta: Repartidor en puerta |
-| `PAYMENT_2_VERIFYING`| `#F59E0B`| Ámbar Dorado: Cobro del 50% contra entrega |
-| `DELIVERED` | `#10B981` | Verde Esmeralda: Pedido completado con éxito |
+### 2.4. Colores Funcionales (Estados de la App y Pagos)
+*   **Éxito / Pagos Verificados (50% Aprobado):**
+    *   Token: `success-500` (`#10B981` / Verde Esmeralda Menta).
+    *   Fondo suave: `success-100` (`#D1FAE5`).
+    *   Uso: Primer 50% verificado, pedido entregado con éxito, saldo conciliado. Transmite seguridad financiera y tranquilidad.
+*   **Alerta / Pendiente (Esperando Comprobante / En Revisión):**
+    *   Token: `warning-500` (`#F59E0B` / Ámbar Dorado Cálido).
+    *   Fondo suave: `warning-100` (`#FEF3C7`).
+    *   Uso: Esperando que el cliente cargue la referencia o en espera de validación bancaria.
+*   **Error / Rechazo / Cancelado:**
+    *   Token: `error-500` (`#DC2626` / Rojo Coral Oscuro).
+    *   Fondo suave: `error-100` (`#FEE2E2`).
+    *   Uso: Referencia bancaria rechazada, restaurante no disponible, pedido cancelado.
+*   **Flujo Operativo (Cocina y En Ruta):**
+    *   `info-prep` (`#2563EB` / Azul Cobalto): Cocina preparando alimentos (`PREPARING`).
+    *   `info-transit` (`#7C3AED` / Violeta Dinámico): Repartidor en ruta GPS (`ON_THE_WAY`).
 | `CANCELLED` / `REJECTED` | `#EF4444` | Rojo Carmesí: Cancelado o reembolsado |
 
 ---
@@ -89,7 +96,7 @@ Cada estado de la orden tiene asignado un color inmutable en badges y barras de 
 *   **Elevaciones y Sombras:**
     *   Nivel 1 (Tarjetas en reposo): `BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: Offset(0, 4))`
     *   Nivel 2 (Modales y BottomSheets): `BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 24, offset: Offset(0, -4))`
-    *   Nivel 3 (Botón flotante de carrito): `BoxShadow(color: Color(0xFFFF5722).withOpacity(0.35), blurRadius: 16, offset: Offset(0, 6))`
+    *   Nivel 3 (Botón flotante de carrito): `BoxShadow(color: Color(0xFFFF5A36).withOpacity(0.35), blurRadius: 16, offset: Offset(0, 6))`
 
 ---
 
