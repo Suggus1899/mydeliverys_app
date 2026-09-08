@@ -137,7 +137,7 @@ erDiagram
 | `id` | UUID | PK | Identificador del pago |
 | `order_id` | UUID | FK `orders.id`, NOT NULL | Pedido asociado |
 | `phase` | VARCHAR(20) | NOT NULL | `FIRST_HALF` (50% inicial) o `SECOND_HALF` (50% final) |
-| `method` | VARCHAR(30) | NOT NULL | `PAGO_MOVIL`, `CASH_USD`, `CASH_VES`, `BINANCE_PAY` |
+| `method` | VARCHAR(30) | NOT NULL | `PAGO_MOVIL`, `BANK_TRANSFER`, `CASH_USD`, `CASH_VES` |
 | `amount` | NUMERIC(10, 2) | NOT NULL | Monto exacto cobrado |
 | `status` | VARCHAR(20) | NOT NULL | `PENDING`, `VERIFIED`, `REJECTED` |
 | `reference_number` | VARCHAR(50) | NULLABLE | Número de referencia bancaria reportada |
@@ -200,14 +200,27 @@ stateDiagram-v2
 
 ---
 
+### 3.5. Límites de dependencia y Clean Architecture pragmática
+
+La V1 se implementa como **monolito modular**. No se crean microservicios ni interfaces sin un consumidor real. Las dependencias apuntan hacia el dominio:
+
+1. `app/domain/` contiene cálculos financieros, estados y reglas puras; no importa FastAPI, SQLAlchemy, Redis ni Celery.
+2. `app/services/` implementa casos de uso transaccionales. Recibe sesiones y entidades desde adaptadores y es el único lugar autorizado para coordinar inventario, pagos, asignaciones y eventos.
+3. `app/api/` adapta HTTP/WebSocket, valida identidad y serializa el envelope; no decide precios ni transiciones.
+4. `app/models/` y `app/infrastructure/` contienen adaptadores SQLAlchemy, Redis, almacenamiento e integraciones.
+5. Flutter organiza cada capacidad en `features/<feature>/data|domain|presentation`; los widgets consumen repositorios mediante Riverpod y no construyen peticiones ni calculan importes autoritativos.
+
+Se acepta que SQLAlchemy modele simultáneamente persistencia y entidades de aplicación durante V1. Si un módulo necesita otra persistencia o sus pruebas requieren sustituir el adaptador, se introducirá un puerto explícito en ese límite. Esta excepción no permite ejecutar SQL o publicar tareas desde widgets ni desde el dominio puro.
+
 ## 4. Arquitectura de Alta Concurrencia y Escalamiento (1.500 a 8.000 Usuarios)
 
 Para soportar picos de alta demanda en San Juan de los Morros (almuerzos de 12:00 a 14:00 y cenas de 19:00 a 21:30) con entre **1.500 usuarios concurrentes promedio y picos de hasta 8.000 usuarios activos simultáneos**, la arquitectura implementa controles estrictos de concurrencia y pooling.
 
 ### 4.1. SLAs y Métricas de Rendimiento Bajo Carga
-*   **Latencia API REST:** Percentil 95 ($p_{95}$) $< 200\text{ ms}$ para endpoints de lectura y $< 300\text{ ms}$ para checkout.
-*   **Distribución WebSocket:** Latencia de entrega de coordenadas $< 50\text{ ms}$.
-*   **Tasa de Error:** $0.0\%$ de errores a 1.500 CCU (*Concurrent Connected Users*) y $< 0.1\%$ a 8.000 CCU.
+> **Nota V1 (normalización):** los valores normativos por nivel de carga viven en `docs/sdd/testing_strategy.md` §5.3. Este resumen debe leerse alineado con esa tabla.
+*   **Latencia API REST:** Percentil 95 ($p_{95}$) $< 120\text{ ms}$ en lecturas de catálogo y $< 200\text{ ms}$ en checkout (`POST /orders/draft`) con 1.500 CCU; $< 250\text{ ms}$ y $< 400\text{ ms}$ respectivamente con 8.000 CCU en estrés.
+*   **Distribución WebSocket:** Latencia de entrega de coordenadas $< 30\text{ ms}$ con 1.500 CCU y $< 60\text{ ms}$ con 8.000 CCU.
+*   **Tasa de Error:** $0.0\%$ de errores HTTP (5xx) a 1.500 CCU (*Concurrent Connected Users*) y $< 0.1\%$ a 8.000 CCU.
 
 ### 4.2. Topología de Conexiones: PgBouncer + Async Connection Pooling
 PostgreSQL maneja conexiones mediante procesos del sistema operativo (cada proceso reserva entre 5 y 10 MB de RAM). Abrir 8.000 conexiones directas provocaría una caída catastrófica del servidor por agotamiento de memoria.

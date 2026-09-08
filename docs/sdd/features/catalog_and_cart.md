@@ -63,4 +63,4 @@ Cuando el usuario pulsa el botón **"Continuar al Pago"**:
     *   Calcula la distancia exacta en metros usando PostGIS entre el restaurante y la dirección seleccionada.
     *   Calcula el `delivery_fee` basado en la distancia por tramos de kilometraje.
     *   Calcula el total oficial y la división 50/50 (`FIRST_HALF_AMOUNT` y `SECOND_HALF_AMOUNT`).
-3.  El pedido se registra en estado `DRAFT` con un **tiempo de expiración de 15 minutos**. Pasado ese tiempo sin reporte de pago, el borrador expira y se libera.
+3.  El pedido se registra en estado `PAYMENT_1_PENDING` (cotización persistida con snapshot inmutable y reserva de 15 minutos) conservando el nombre del endpoint `POST /orders/draft`. `DRAFT` describe únicamente el carrito local previo en Flutter. Pasado ese tiempo sin reporte de pago, expira a `CANCELLED` y se libera la reserva. Ver spec normalizada `02_catalog_inventory_cart.md`.

@@ -1,0 +1,1 @@
+"""Dominio independiente de infraestructura."""

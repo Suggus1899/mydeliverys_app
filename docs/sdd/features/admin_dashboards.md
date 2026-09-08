@@ -8,9 +8,10 @@ El panel del restaurante está diseñado para ser ultrarrápido y funcional, acc
 
 ### 1.1. Vistas y Secciones Clave
 *   **Kanban de Pedidos en Tiempo Real:** Los pedidos se organizan en columnas según la máquina de estados:
-    1.  *Nuevos (Ya pagados - 50% inicial verificado):* Aquí aparecen los pedidos que acaban de pasar a estado `PREPARING`. El sistema emite una alerta sonora distintiva en la app para llamar la atención del cocinero.
-    2.  *En Preparación:* Pedidos que la cocina está procesando actualmente. El administrador puede hacer clic en "Comida Lista" (`READY_FOR_PICKUP`).
-    3.  *Historial del Día:* Listado de pedidos completados o cancelados durante la jornada para auditoría interna del local.
+    1.  *Nuevos (Ya pagados - 50% inicial verificado):* Aquí aparecen los pedidos que acaban de pasar a estado `PREPARING` sin reconocimiento de cocina (`acknowledged_at IS NULL`). El sistema emite una alerta sonora distintiva en la app para llamar la atención del cocinero.
+    2.  *En Preparación:* Pedidos en `PREPARING` ya reconocidos por cocina (`acknowledged_at NOT NULL`). El administrador puede hacer clic en "Comida Lista" (`READY_FOR_PICKUP`).
+    3.  *Listos para Recoger:* Pedidos en `READY_FOR_PICKUP` esperando al repartidor.
+*   **Historial del Día (vista separada, no columna Kanban):** Listado de pedidos `DELIVERED`, `CANCELLED`, `CANCELLED_WITH_REFUND` y `DELIVERY_FAILED` durante la jornada para auditoría interna del local.
 
 *   **Gestión Rápida de Menú (Toggle de Stock):**
     *   Una vista simplificada de lista donde el administrador puede encender o apagar rápidamente la disponibilidad (`is_available`) de los platos o modificadores si se agotaron los ingredientes en el día.

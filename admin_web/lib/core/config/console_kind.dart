@@ -1,0 +1,1 @@
+enum ConsoleKind { admin, restaurant }

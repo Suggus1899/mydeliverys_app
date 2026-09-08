@@ -35,7 +35,7 @@ El proyecto implementa una estrategia de calidad en cuatro niveles jerárquicos:
     *   Invariante contable: `assert first_half + second_half == total_amount`.
 *   **Máquina de Estados Global (`OrderStatus`):**
     *   Verificar que cada transición válida altere el estado correctamente.
-    *   Verificar que cualquier transición inválida (ej. intentar saltar de `DRAFT` directo a `PREPARING` o de `ON_THE_WAY` a `DELIVERED` sin registrar el segundo 50%) lance un error controlado `InvalidStateTransitionError` con código `HTTP 400/422`.
+    *   Verificar que cualquier transición inválida (ej. intentar saltar de `PAYMENT_1_PENDING` directo a `PREPARING` o de `ON_THE_WAY` a `DELIVERED` sin registrar el segundo 50%) lance `INVALID_STATE_TRANSITION` con `HTTP 409`.
 *   **Validador de Modificadores:**
     *   Comprobar que selecciones inferiores a `min_selectable` o superiores a `max_selectable` sean rechazadas con `422 Unprocessable Entity`.
 

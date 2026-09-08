@@ -10,7 +10,7 @@ Para evitar frustraciones si el cliente pierde conexión navegando por el menú:
 1.  **Estado Local:** Flutter almacena el carrito en la base de datos local (Hive/Isar). 
 2.  **Validación Pre-Checkout:** Al presionar "Ir a Pagar", Flutter envía un payload (lista de `product_id`, `quantity`, `modifier_ids`) al endpoint `POST /orders/draft`.
 3.  **Cotización del Servidor:** FastAPI calcula el precio real basado en la base de datos (ignorando cualquier precio que mande Flutter para evitar hackeos) y calcula el costo de envío usando PostGIS (distancia entre el restaurante y el `user_addresses` seleccionado).
-4.  **Respuesta:** El backend devuelve el `DRAFT` con los montos exactos y bloquea los precios de esos ítems para esta orden durante 15 minutos.
+4.  **Respuesta:** El backend devuelve una orden `PAYMENT_1_PENDING` con los montos exactos, snapshot inmutable y reserva de inventario durante 15 minutos. `DRAFT` solo nombra al carrito local.
 
 ---
 
@@ -112,8 +112,8 @@ sequenceDiagram
 
 ## 5. Políticas de Cancelación, Contingencias y Reembolsos
 
-1.  **Cancelación Pre-Pago 1 (`DRAFT` o `PAYMENT_1_PENDING`):**
-    *   Si el cliente desiste o transcurren los 15 minutos de tolerancia, el borrador pasa a `CANCELLED` automáticamente. No se genera ningún movimiento financiero.
+1.  **Cancelación Pre-Pago 1 (`PAYMENT_1_PENDING`):**
+    *   Si el cliente desiste o transcurren los 15 minutos de tolerancia, la cotización pasa a `CANCELLED` automáticamente y se libera la reserva. No se genera ningún movimiento financiero. (`DRAFT` es solo el carrito local en Flutter, no un estado del backend.)
 2.  **Rechazo por el Restaurante o Contingencia (`PREPARING`):**
     *   Si el restaurante se queda sin insumos o experimenta una falla eléctrica/técnica en San Juan de los Morros y no puede despachar, presiona **[Rechazar / Cancelar Orden]**.
     *   La orden pasa inmediatamente al estado crítico `CANCELLED_WITH_REFUND`.

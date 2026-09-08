@@ -1,0 +1,84 @@
+[tool.poetry]
+name = "mydeliverys-backend"
+version = "0.1.0"
+description = "API de Delivery San Juan de los Morros"
+authors = ["mydeliverys"]
+packages = [{include = "app"}]
+
+[tool.poetry.dependencies]
+python = ">=3.12,<3.13"
+fastapi = "^0.115"
+uvicorn = {version = "^0.34", extras = ["standard"]}
+pydantic = "^2.10"
+pydantic-settings = "^2.7"
+sqlalchemy = {version = "^2.0", extras = ["asyncio"]}
+asyncpg = "^0.30"
+alembic = "^1.14"
+geoalchemy2 = "^0.17"
+redis = "^5.2"
+celery = "^5.4"
+httpx = "^0.28"
+pyjwt = {version = "^2.10", extras = ["crypto"]}
+pwdlib = {version = "^0.3", extras = ["argon2"]}
+pyotp = "^2.9"
+cryptography = ">=44,<47"
+python-multipart = "^0.0.20"
+pillow = "^11.1"
+boto3 = "^1.37"
+firebase-admin = "^6.7"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3"
+pytest-asyncio = "^0.25"
+pytest-cov = "^6.0"
+ruff = "^0.9"
+mypy = "^1.14"
+testcontainers = {version = "^4.9", extras = ["postgres", "redis"]}
+locust = "^2.32"
+
+[build-system]
+requires = ["poetry-core>=2,<3"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+markers = ["integration: Requiere PostGIS y Redis reales", "concurrency: Colisiones transaccionales reales"]
+
+[tool.coverage.run]
+branch = true
+source = ["app.domain.financial", "app.domain.states"]
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501", "B008"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = false
+plugins = ["pydantic.mypy"]
+ignore_missing_imports = true
+exclude = ["\\.venv", "alembic/versions"]
+disallow_untyped_defs = true
+disallow_any_generics = false
+warn_return_any = false
+warn_unused_ignores = false
+
+[[tool.mypy.overrides]]
+module = ["app.core.celery", "app.integrations", "app.tasks.*", "app.api.v1.endpoints.*"]
+disallow_untyped_decorators = false
+disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+ignore_errors = true
+disallow_untyped_defs = false

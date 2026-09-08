@@ -9,9 +9,10 @@ Este documento define la infraestructura tecnológica aprobada. **Bajo ninguna c
     *   *Justificación:* Seguro en tiempo de compilación y excelente para el manejo de dependencias asíncronas (como verificar si el usuario tiene internet). Queda estrictamente prohibido usar GetX, Provider (antiguo) o setState para lógica de negocio global.
 *   **Enrutamiento:** **GoRouter**.
     *   *Regla:* Manejo estricto de URLs y Deep Linking para permitir notificaciones push que abran el pedido directamente.
-*   **Almacenamiento Local (Offline caching):** **Hive** o **Isar**.
-    *   *Regla:* El carrito de compras y los tokens de sesión deben persistirse localmente para manejar las desconexiones temporales.
+*   **Almacenamiento Local (Offline caching):** **Hive**.
+    *   *Regla:* Hive conserva carrito, cache y operaciones pendientes. Android guarda credenciales mediante `flutter_secure_storage`; web usa cookies `HttpOnly` y protección CSRF, sin credenciales en Hive.
 *   **Geolocalización y Mapas:** `google_maps_flutter` y `geolocator`.
+*   **Paquetes aprobados V1:** `flutter_riverpod`, `go_router`, `http`, `web_socket_channel`, `hive_flutter`, `flutter_secure_storage`, `firebase_core`, `firebase_messaging`, `image_picker`, `audioplayers`, `uuid`, `google_maps_flutter` y `geolocator`.
 
 ## 2. Backend (API y Lógica de Negocio)
 *   **Framework Principal:** **FastAPI**.
@@ -31,12 +32,14 @@ Este documento define la infraestructura tecnológica aprobada. **Bajo ninguna c
     *   *Regla:* Prohibido escribir queries SQL en crudo (raw SQL) para operaciones CRUD estándar. Se debe usar la API del ORM para evitar inyección SQL.
 *   **Migraciones:** **Alembic**.
     *   *Regla:* Cualquier cambio en la estructura de la base de datos (nuevas tablas, columnas) DEBE generarse a través de un script de Alembic. No se permite modificar tablas directamente en la BD de producción.
+*   **Paquetes aprobados V1:** `FastAPI`, `Pydantic v2`, `SQLAlchemy 2`, `asyncpg`, `Alembic`, `PyJWT`, `pwdlib[argon2]`, `PyOTP`, `cryptography`, `GeoAlchemy2`, `python-multipart`, `Pillow`, `boto3`, `firebase-admin`, `httpx`, `Redis`, `Celery`, `pytest-cov` y `mypy`.
 
 ## 4. Integraciones de Terceros (APIs)
-*   **Pasarela de Pagos:** Pago Móvil (bancos locales venezolanos) y Binance Pay.
+*   **Medios de pago:** Pago Móvil, transferencia bancaria y efectivo USD/VES.
     *   *Regla de Seguridad:* El backend NUNCA debe almacenar números de tarjeta de crédito (PCI DSS).
 *   **Notificaciones Push:** Firebase Cloud Messaging (FCM).
-*   **Mensajería y OTP:** WhatsApp Business API (Meta Cloud API o Twilio) para verificación de clientes.
+*   **Mensajería y OTP:** Meta Cloud API de WhatsApp para verificación de clientes.
+*   **Tasa:** DolarAPI Venezuela, exclusivamente `https://ve.dolarapi.com/v1/dolares/oficial`.
 
 ## 5. Herramientas de Pruebas y Aseguramiento de Calidad (Testing & QA)
 *   **Backend (Python):**

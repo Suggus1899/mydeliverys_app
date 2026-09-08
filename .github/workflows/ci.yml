@@ -1,0 +1,247 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  POSTGRES_PASSWORD: postgres
+  POSTGRES_USER: mydeliverys
+  POSTGRES_DB: mydeliverys_test
+  REDIS_CONTROL_URL: redis://localhost:6379/0
+  REDIS_CACHE_URL: redis://localhost:6380/0
+  CELERY_BROKER_URL: redis://localhost:6379/1
+  CELERY_RESULT_BACKEND: redis://localhost:6379/2
+  DATABASE_URL: postgresql+asyncpg://mydeliverys:postgres@localhost:6432/mydeliverys_test
+  SECRET_KEY: test-secret-key-for-ci-only-minimum-32-chars
+  CREDENTIAL_ENCRYPTION_SECRET: test-encryption-secret-for-ci-minimum-32-chars
+  JWT_PRIVATE_KEY_PATH: /tmp/keys/private.pem
+  JWT_PUBLIC_KEY_PATH: /tmp/keys/public.pem
+  ENVIRONMENT: test
+  RATE_LIMIT_ENABLED: "false"
+  LOG_LEVEL: DEBUG
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Backend: Lint, Typecheck, Unit Tests, Integration Tests, Concurrency Tests
+  # ---------------------------------------------------------------------------
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: ${{ env.POSTGRES_DB }}
+          POSTGRES_USER: ${{ env.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
+        ports: [5432:5432]
+        options: >-
+          --health-cmd="pg_isready -U mydeliverys -d mydeliverys_test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+      redis:
+        image: redis:7.4.5-alpine
+        ports: [6379:6379]
+        options: --health-cmd="redis-cli ping" --health-interval=10s --health-timeout=3s --health-retries=5
+      redis-cache:
+        image: redis:7.4.5-alpine
+        ports: [6380:6379]
+        options: --health-cmd="redis-cli ping" --health-interval=10s --health-timeout=3s --health-retries=5
+      pgbouncer:
+        image: edoburu/pgbouncer:v1.25.2-p0
+        env:
+          DATABASES_HOST: postgres
+          DATABASES_PORT: 5432
+          DATABASES_DBNAME: ${{ env.POSTGRES_DB }}
+          DATABASES_USER: ${{ env.POSTGRES_USER }}
+          DATABASES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
+          POOL_MODE: transaction
+          LISTEN_PORT: 6432
+          MAX_CLIENT_CONN: 10000
+          DEFAULT_POOL_SIZE: 20
+          RESERVE_POOL_SIZE: 5
+        ports: [6432:6432]
+        options: >-
+          --health-cmd="pg_isready -h localhost -p 6432 -U mydeliverys -d mydeliverys_test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "poetry"
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: 2.1.3
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Generate JWT keys
+        run: |
+          mkdir -p /tmp/keys
+          openssl genrsa -out /tmp/keys/private.pem 2048
+          openssl rsa -in /tmp/keys/private.pem -pubout -out /tmp/keys/public.pem
+
+      - name: Install dependencies
+        working-directory: ./backend
+        run: poetry install --with=dev --no-interaction
+
+      - name: Run Ruff (lint + format check)
+        working-directory: ./backend
+        run: poetry run ruff check . && poetry run ruff format --check .
+
+      - name: Run MyPy (type checking)
+        working-directory: ./backend
+        run: poetry run mypy .
+
+      - name: Run Alembic migrations
+        working-directory: ./backend
+        run: poetry run alembic upgrade head
+
+      - name: Run unit tests with coverage
+        working-directory: ./backend
+        run: poetry run pytest -v tests/unit --cov=app.domain.financial --cov=app.domain.states --cov-report=xml --cov-report=term-missing
+
+      - name: Run integration tests
+        working-directory: ./backend
+        run: poetry run pytest -v tests/integration -m integration
+
+      - name: Run concurrency tests
+        working-directory: ./backend
+        run: poetry run pytest -v tests/concurrency -m concurrency
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./backend/coverage.xml
+          flags: backend
+          fail_ci_if_error: true
+
+  # ---------------------------------------------------------------------------
+  # Frontend: Analyze, Unit Tests, Widget Tests
+  # ---------------------------------------------------------------------------
+  mobile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.8"
+          channel: "stable"
+          cache: true
+
+      - name: Install dependencies
+        working-directory: ./mobile
+        run: flutter pub get
+
+      - name: Run Flutter analyze
+        working-directory: ./mobile
+        run: flutter analyze
+
+      - name: Run unit tests
+        working-directory: ./mobile
+        run: flutter test --coverage
+
+      - name: Build Android applications
+        working-directory: ./mobile
+        run: |
+          flutter build apk --debug --flavor customer -t lib/main_customer.dart
+          flutter build apk --debug --flavor driver -t lib/main_driver.dart
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./mobile/coverage/lcov.info
+          flags: frontend
+          fail_ci_if_error: true
+
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.8"
+          channel: stable
+          cache: true
+      - working-directory: ./admin_web
+        run: flutter pub get
+      - working-directory: ./admin_web
+        run: flutter analyze && flutter test --coverage
+      - name: Build admin and restaurant web applications
+        working-directory: ./admin_web
+        run: |
+          flutter build web --release -t lib/main_admin.dart --output build/admin
+          flutter build web --release -t lib/main_restaurant.dart --output build/restaurant
+
+  # ---------------------------------------------------------------------------
+  # Docker Build Test
+  # ---------------------------------------------------------------------------
+  docker-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [backend, mobile, web]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build backend Docker image
+        working-directory: ./backend
+        run: docker build -t mydeliverys-backend:test --target development .
+
+      - name: Build web Docker images
+        run: |
+          docker build -t mydeliverys-admin:test --build-arg TARGET=lib/main_admin.dart ./admin_web
+          docker build -t mydeliverys-restaurant:test --build-arg TARGET=lib/main_restaurant.dart ./admin_web
+
+  # ---------------------------------------------------------------------------
+  # Security Scan
+  # ---------------------------------------------------------------------------
+  security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner (backend)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'fs'
+          scan-ref: './backend'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  # ---------------------------------------------------------------------------
+  # Notify on failure
+  # ---------------------------------------------------------------------------
+  notify:
+    runs-on: ubuntu-latest
+    needs: [backend, mobile, web, docker-build, security]
+    if: failure()
+    steps:
+      - name: Send failure notification
+        run: |
+          echo "CI pipeline failed. Check GitHub Actions for details."

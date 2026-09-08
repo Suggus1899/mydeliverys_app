@@ -1,0 +1,238 @@
+services:
+  # PostgreSQL 16 + PostGIS 3.4
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: mydeliverys_postgres
+    environment:
+      POSTGRES_DB: mydeliverys
+      POSTGRES_USER: mydeliverys
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init-db/:/docker-entrypoint-initdb.d/:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mydeliverys -d mydeliverys"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+
+  # PgBouncer - Transaction Pooling
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.25.2-p0
+    container_name: mydeliverys_pgbouncer
+    environment:
+      DATABASES_HOST: postgres
+      DATABASES_PORT: 5432
+      DATABASES_DBNAME: mydeliverys
+      DATABASES_USER: mydeliverys
+      DATABASES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POOL_MODE: transaction
+      LISTEN_PORT: 6432
+      MAX_CLIENT_CONN: 10000
+      DEFAULT_POOL_SIZE: 100
+      RESERVE_POOL_SIZE: 20
+      RESERVE_POOL_TIMEOUT: 5
+      ADMIN_USERS: mydeliverys
+      STATS_USERS: mydeliverys
+    ports:
+      - "6432:6432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "localhost", "-p", "6432", "-U", "mydeliverys", "-d", "mydeliverys"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis durable para cuotas, OTP, idempotencia, colas y Pub/Sub.
+  redis-control:
+    image: redis:7.4.5-alpine
+    container_name: mydeliverys_redis_control
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy noeviction
+    volumes:
+      - redis_control_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # Cache reconstruible; su eviction nunca elimina controles operativos.
+  redis-cache:
+    image: redis:7.4.5-alpine
+    container_name: mydeliverys_redis_cache
+    command: redis-server --appendonly no --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # Backend API (FastAPI)
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: development
+    container_name: mydeliverys_api
+    environment:
+      - ENVIRONMENT=development
+      - DATABASE_URL=postgresql+asyncpg://mydeliverys:${POSTGRES_PASSWORD:-changeme}@pgbouncer:6432/mydeliverys
+      - REDIS_CONTROL_URL=redis://redis-control:6379/0
+      - REDIS_CACHE_URL=redis://redis-cache:6379/0
+      - CELERY_BROKER_URL=redis://redis-control:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis-control:6379/2
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-change-in-production}
+      - CREDENTIAL_ENCRYPTION_SECRET=${CREDENTIAL_ENCRYPTION_SECRET:-dev-credential-encryption-secret-change-me}
+      - JWT_ALGORITHM=RS256
+      - JWT_PRIVATE_KEY_PATH=/app/keys/private.pem
+      - JWT_PUBLIC_KEY_PATH=/app/keys/public.pem
+      - ACCESS_TOKEN_EXPIRE_MINUTES=15
+      - REFRESH_TOKEN_EXPIRE_DAYS=30
+      - WEB_SESSION_MAX_HOURS=8
+      - DOLARAPI_URL=https://ve.dolarapi.com/v1/dolares/oficial
+      - EXCHANGE_RATE_FETCH_INTERVAL_MINUTES=30
+      - EXCHANGE_RATE_STALE_HOURS=6
+      - RESERVATION_TTL_MINUTES=15
+      - RATE_LIMIT_ENABLED=true
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:8080,capacitor://localhost
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - ./backend:/app
+      - ./backend/keys:/app/keys:ro
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      pgbouncer:
+        condition: service_healthy
+      redis-control:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+    command: >
+      sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
+
+  # Celery Worker (Background Tasks)
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: development
+    container_name: mydeliverys_celery_worker
+    environment:
+      - ENVIRONMENT=development
+      - DATABASE_URL=postgresql+asyncpg://mydeliverys:${POSTGRES_PASSWORD:-changeme}@pgbouncer:6432/mydeliverys
+      - REDIS_CONTROL_URL=redis://redis-control:6379/0
+      - REDIS_CACHE_URL=redis://redis-cache:6379/0
+      - CELERY_BROKER_URL=redis://redis-control:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis-control:6379/2
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-change-in-production}
+      - CREDENTIAL_ENCRYPTION_SECRET=${CREDENTIAL_ENCRYPTION_SECRET:-dev-credential-encryption-secret-change-me}
+      - DOLARAPI_URL=https://ve.dolarapi.com/v1/dolares/oficial
+      - EXCHANGE_RATE_FETCH_INTERVAL_MINUTES=30
+      - EXCHANGE_RATE_STALE_HOURS=6
+      - RESERVATION_TTL_MINUTES=15
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      pgbouncer:
+        condition: service_healthy
+      redis-control:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+    command: >
+      sh -c "celery -A app.core.celery worker --loglevel=info --concurrency=4"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
+
+  # Celery Beat (Periodic Tasks - Exchange Rate Fetch)
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: development
+    container_name: mydeliverys_celery_beat
+    environment:
+      - ENVIRONMENT=development
+      - DATABASE_URL=postgresql+asyncpg://mydeliverys:${POSTGRES_PASSWORD:-changeme}@pgbouncer:6432/mydeliverys
+      - REDIS_CONTROL_URL=redis://redis-control:6379/0
+      - REDIS_CACHE_URL=redis://redis-cache:6379/0
+      - CELERY_BROKER_URL=redis://redis-control:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis-control:6379/2
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-change-in-production}
+      - CREDENTIAL_ENCRYPTION_SECRET=${CREDENTIAL_ENCRYPTION_SECRET:-dev-credential-encryption-secret-change-me}
+      - DOLARAPI_URL=https://ve.dolarapi.com/v1/dolares/oficial
+      - EXCHANGE_RATE_FETCH_INTERVAL_MINUTES=30
+      - EXCHANGE_RATE_STALE_HOURS=6
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      pgbouncer:
+        condition: service_healthy
+      redis-control:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+    command: >
+      sh -c "celery -A app.core.celery beat --loglevel=info --scheduler celery.beat.PersistentScheduler"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
+
+  # Flower (Celery Monitoring)
+  flower:
+    image: mher/flower:2.0
+    container_name: mydeliverys_flower
+    environment:
+      - CELERY_BROKER_URL=redis://redis-control:6379/1
+      - FLOWER_PORT=5555
+      - FLOWER_BASIC_AUTH=admin:${FLOWER_PASSWORD:-changeme}
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis-control
+      - celery-worker
+
+volumes:
+  postgres_data:
+  redis_control_data:
+
+networks:
+  default:
+    name: mydeliverys_network
