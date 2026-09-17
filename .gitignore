@@ -77,3 +77,9 @@ storage/
 .Trashes
 ehthumbs.db
 Thumbs.db
+# Local environment files
+!.env.*.example
+!.env.sample
+!.env.*.sample
+!.env.template
+!.env.*.template
